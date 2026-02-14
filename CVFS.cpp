@@ -53,6 +53,9 @@ using namespace std;
 #define ERR_PERMISSION_DENIED -5
 #define ERR_INSUFFICIENT_SPACE -6
 #define ERR_INSUFFICIENT_DATA -7
+#define ERR_NO_ENTRY_DIR -8
+#define ERR_MAX_FILE_OPEN -9
+#define ERR_FILE_NOT_OPEN -10
 
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -88,7 +91,6 @@ struct SuperBlock
 
 typedef struct Inode
 {
-    char FileName[50];
     int InodeNumber;
     int FileSize;
     int ActualFileSize;
@@ -128,8 +130,23 @@ typedef struct FileTable
 struct UAREA
 {
     char ProcessName[50];
+    char WorkingDir[50];
+    int dirInode;
     PFILETABLE UFDT[MAXOPENEDFILES];
 
+};
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Structure name : DirEntry
+//  Description :    Holds File names and its Inode Numbers
+//
+///////////////////////////////////////////////////////////////////////////
+
+struct DirEntry
+{
+    char FileName[20];
+    int InodeNumber;
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -156,6 +173,10 @@ void InitialiseUREA()
 {
     strcpy(uareaobj.ProcessName,"Myexe");
 
+    strcpy(uareaobj.WorkingDir,"root"); 
+
+    uareaobj.dirInode = 1;
+
     int i = 0;
 
     while(i < MAXOPENEDFILES)
@@ -165,6 +186,44 @@ void InitialiseUREA()
     }
     cout<<"CVFS : UREA initialised sucessfully\n";
 }
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  InitialiseDirEntry
+//  Description:     It is used to initialise Root Director of file system.
+//  Author :         Mangesh Ashok Bedre
+//  Date :           19/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+void InitialiseDirEntry()
+{
+    PINODE root = head;
+
+    // chose inode 1 for root directory
+    if(root == NULL)
+    {
+        printf("Creating root directory failed\n");
+        return;
+    }
+    
+    //Initialising root Directory inode
+    root->FileSize = MAXFILESIZE;
+    root->ActualFileSize = 0;
+    root->FileType = SPECIALFILE;
+    root->ReferenceCount = 1;
+    root->Permission = READ+WRITE;
+
+    // Allocate memory for Directory Entries
+    root->Buffer = (char*)malloc(MAXFILESIZE);
+
+    memset(root->Buffer, 0, MAXFILESIZE);
+
+    superobj.FreeInodes--;
+
+    printf("CVFS : Created root directory successfully\n");
+}
+
 ////////////////////////////////////////////////////////////////////////////
 //
 //  Function name :  InitialiseSuperBlock
@@ -201,7 +260,7 @@ void CreateDILB()
     {
         newn = new INODE;
 
-        newn->InodeNumber = 1;
+        newn->InodeNumber = i;
         newn->FileSize = 0;
         newn->ActualFileSize = 0;
         newn->LinkCount = 0;
@@ -246,6 +305,8 @@ void StartAuxillaryDataInitialisation()
     
     InitialiseUREA();
 
+    InitialiseDirEntry();
+
     cout<<"CVFS : Auxillary data initialised sucessfully\n";
 }
 ////////////////////////////////////////////////////////////////////////////
@@ -271,6 +332,12 @@ void DispalyHelp()
     printf("read : It is used to read the data from the file\n");
     printf("stat : It is used to display statical information about file\n");
     printf("creat : It is used to create new regular file\n");
+    printf("open : It is used to open regular file\n");
+    printf("close : It is used to close regular file\n");
+    printf("mkdir : It is used to create new directory\n");
+    printf("rmdir : It is used to delete  directory\n");
+    printf("cd : It is used to change directory from one directory to another\n");
+    printf("pwd : It is used to display current working directory\n");
     printf("unlink : It is used to unlink the file\n");
     printf("cls : It is used to clear the console of marvellous CVFS\n");
     printf("exit : It is used to terminate the shell of marvellous  CVFS\n");
@@ -295,7 +362,7 @@ void ManPage(
     if(strcmp(name,"creat") == 0)
     {
         printf("Description : This command is used to create regular file on our system\n");
-        printf("Usage : create file_name Permission\n");
+        printf("Usage : create <file_name> <Permission>\n");
         printf("file_name : The name file that you want to create \n");
         printf("Permission : \n1 : read\n2 : write\n3 : readwite\n");
     }
@@ -308,14 +375,14 @@ void ManPage(
     else if(strcmp(name,"unlink") == 0)
     {
         printf("Description : This command is used to delete regular file from our system\n");
-        printf("Usage : unlink file_name \n");
+        printf("Usage : unlink <file_name> \n");
         printf("file_name : The name file that you want to delete \n");
         
     }
     else if(strcmp(name,"stat") == 0)
     {
         printf("Description : This command is used to display statistical onfo about file from our system\n");
-        printf("Usage : stat file_name \n");
+        printf("Usage : stat <file_name> \n");
         printf("file_name : The name file whose information you want to dispaly\n");
         
     }
@@ -328,15 +395,61 @@ void ManPage(
     else if(strcmp(name,"write") == 0)
     {
         printf("Description : This command is used to write the data into file\n");
-        printf("Usage : write file_descriptor\n");
+        printf("Usage : write <file_descriptor>\n");
        
     }
     else if(strcmp(name,"read") == 0)
     {
         printf("Description : This command is used to read the data from file\n");
-        printf("Usage : read file_descriptor size\n");
+        printf("Usage : read <file_descriptor> <size>\n");
         printf("file_decriptor : Its a value returned by create system call\n");
         printf("size : Number of byte that you want to read\n");
+    }
+    else if(strcmp(name,"open") == 0)
+    {
+        printf("Description : This command is used to open the file\n");
+        printf("Usage : open <file_name>\n");
+        printf("file_name : The name of file that you want to open\n");
+    }
+    else if(strcmp(name,"close") == 0)
+    {
+        printf("Description : This command is used to close the file\n");
+        printf("Usage : close <file_name>\n");
+        printf("file_name : The name of file that you want to close\n");
+    }
+    else if(strcmp(name,"mkdir") == 0)
+    {
+        printf("Description : This command is used to Create Directory\n");
+        printf("Usage : mkdir <directory_name>\n");
+        printf("directory_name : The name of directory that you want to create\n");
+    }
+    else if(strcmp(name,"rmdir") == 0)
+    {
+        printf("Description : This command is used to delete Directory\n");
+        printf("Usage : rmdir <directory_name>\n");
+        printf("directory_name : The name of directory that you want to delete\n");
+    }
+    else if(strcmp(name,"cd") == 0)
+    {
+        printf("Description : This command is used to change Directory\n");
+        printf("Usage : cd <directory_name>\n");
+        printf("directory_name : The name of directory that you want to change\n");
+    }
+    else if(strcmp(name,"man") == 0)
+    {
+        printf("About : It is used to display manual page\n");
+        printf("Usage : man <command_name>\n");
+        printf("command_name : It is a name of command\n");
+    }
+    else if(strcmp(name,"clear") == 0)
+    {
+        printf("About : It is used to clear the shell\n");
+        printf("Usage : clear\n");
+    }
+    else if(strcmp(name,"pwd") == 0)
+    {
+        printf("About : It is used to display the current working directory\n");
+        printf("Usage : pwd\n");
     }
 
     // add more option here
@@ -344,6 +457,81 @@ void ManPage(
     else
     {
         printf("\nNo Manual entry for %s\n",name);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  GetCurrentDirBuffer
+//  Description:     It is used to get buffer of current Directory
+//  Input :          -
+//  Output :         Returns Buffer of Current directory .
+//  Author :         Mangesh Ashok Bedre
+//  Date :           09/02/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+struct DirEntry* GetCurrentDirBuffer()
+{
+    PINODE temp = head;
+    while(temp != NULL)
+    {
+        if(temp->InodeNumber == uareaobj.dirInode)
+        {
+            return (struct DirEntry*)temp->Buffer;
+        }
+        temp = temp->next;
+    }
+    return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  GetInodeOfFile
+//  Description:     It is used to get entry of file from directory
+//  Input :          It accept the file name .
+//  Output :         InodeNumber
+//  Author :         Mangesh Ashok Bedre
+//  Date :           20/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+int GetInodeOfFile(
+                    char *name
+                  )
+{
+    PINODE temp = head;
+    int MaxEntry = 0,i = 0;
+    int InodeNumber = 0;
+
+    struct DirEntry* DIR = NULL;
+
+    // If we want inode of root. we have give it manually we root entry not register any where.
+    if((strcmp(name,"root") == 0)) return 1;
+    
+    // Check we are in which current dir and get its Buffer
+    DIR = GetCurrentDirBuffer();
+    if(DIR == NULL) return false;
+
+    MaxEntry = MAXFILESIZE / sizeof(struct DirEntry);
+
+    // Searching for of given file name inode inside current working directory
+    for(i = 0 ; i < MaxEntry; i++)
+    {
+        if(strcmp(DIR[i].FileName,name) == 0)
+        {
+            InodeNumber = DIR[i].InodeNumber;
+            break;
+        }
+    }
+
+    if(i == MaxEntry)
+    {
+        return ERR_NO_ENTRY_DIR;
+    }
+    else
+    {
+        return InodeNumber;
     }
 }
 
@@ -363,19 +551,134 @@ bool isFileExists(
                     char *name // name of file that we want to check
                 )
 {
-    bool bFlaf = false;
+    bool bFlag = false;
     PINODE temp = head;
+    int iRet = 0;
 
+    // Getting inode number of name
+    iRet = GetInodeOfFile(name);
+
+    // if name entry not present in directory
+    if(iRet == ERR_NO_ENTRY_DIR)
+    {
+        return bFlag;
+    }
+
+    // Entry present but check file exists
     while(temp != NULL)
     {
-        if((strcmp(name,temp->FileName) == 0) && temp->FileType == REGULARFILE)
+        if((temp->FileType != 0) && ((temp->InodeNumber) == iRet))
         {
-            bFlaf = true;
+            bFlag = true;
             break;
         }
         temp = temp->next;
     }
-    return bFlaf;
+
+    return bFlag;
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  AddFileEntryInDir
+//  Description:     It is used to register entry of file into directory
+//  Input :          It accept the file name and InodeNumber
+//  Output :         Nothing
+//  Author :         Mangesh Ashok Bedre
+//  Date :           20/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+bool AddFileEntryInDir(
+                            char* name,
+                            int inode
+                        )
+{
+    PINODE temp = head;
+    int MaxEntry = 0,i = 0;
+    bool Flag = false;
+
+    struct DirEntry* DIR = GetCurrentDirBuffer();
+    if(DIR == NULL) return Flag;
+    
+    MaxEntry = MAXFILESIZE / sizeof(struct DirEntry);
+
+    for(i = 0; i < MaxEntry; i++)
+    {
+        if(DIR[i].InodeNumber == 0 )
+        {
+            strcpy(DIR[i].FileName,name);
+            DIR[i].InodeNumber = inode;
+            Flag = true;
+            break;
+        }
+    }
+
+    return Flag;
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  OpenFile
+//  Description:     It is used to open regular file
+//  Input :          It accept the file name and permission
+//  Output :         It return file descriptor
+//  Author :         Mangesh Ashok Bedre
+//  Date :           20/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+int OpenFile(
+                char *name
+            )
+{
+    int iRet = 0,i = 0;
+    PINODE temp = head;
+
+    iRet = GetInodeOfFile(name);
+
+    if(iRet == ERR_NO_ENTRY_DIR)
+    {
+        return ERR_FILE_NOT_EXIST;
+    }
+
+    // Finding inode of file from DILB
+    while(temp != NULL)
+    {
+        if((temp->InodeNumber == iRet) && (temp->FileType == 1))
+        {
+            break;
+        }
+
+        temp = temp->next;
+    }
+
+    // Finding NULL entry from UFDT
+    for(i = 0; i < MAXOPENEDFILES; i++)
+    {
+        if(uareaobj.UFDT[i] == NULL)
+        {
+            break;
+        }
+    }
+
+    if(i == MAXOPENEDFILES)
+    {
+        return ERR_MAX_FILE_OPEN;
+    }
+
+    uareaobj.UFDT[i] = (PFILETABLE)malloc(sizeof(FILETABLE));
+
+    
+    uareaobj.UFDT[i]->ReadOffset = 0;
+    uareaobj.UFDT[i]->WriteOffset = 0;
+    uareaobj.UFDT[i]->Count = 1;
+    
+    //Connecting to inode
+    uareaobj.UFDT[i]->ptrinode = temp;
+
+    return i;
+
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -397,7 +700,7 @@ int CreateFile(
     PINODE temp = head;
     int i = 0;
 
-    printf("Current inode remaining %d\n",superobj.FreeInodes);
+
     //Filters
 
     // if file name missing
@@ -438,21 +741,21 @@ int CreateFile(
     // inode not found
     if(temp == NULL)
     {
-        printf("Inode not found\n");
         return ERR_NO_INODE;
     }
 
     // serach first non null value from UFDT
-    for(i = 0; i < MAXINODE; i++)
+    for(i = 0; i < MAXOPENEDFILES; i++)
     {
         if(uareaobj.UFDT[i] == NULL)
         {
             break;
         }
     }
-    if(i == MAXINODE)
-    {
-        printf("Unable to opened file as max opened  limit  reached\n");
+
+    if(i == MAXOPENEDFILES)
+    {    
+        return ERR_MAX_FILE_OPEN;
     }
 
     // Allocate memory for file table
@@ -467,7 +770,7 @@ int CreateFile(
     // connect to IIT
     uareaobj.UFDT[i]->ptrinode = temp;
 
-    strcpy(uareaobj.UFDT[i]->ptrinode->FileName,name);
+    // strcpy(uareaobj.UFDT[i]->ptrinode->FileName,name);
     uareaobj.UFDT[i]->ptrinode->FileSize = MAXFILESIZE;
     uareaobj.UFDT[i]->ptrinode->ActualFileSize = 0;
     uareaobj.UFDT[i]->ptrinode->FileType = REGULARFILE;
@@ -475,9 +778,18 @@ int CreateFile(
     uareaobj.UFDT[i]->ptrinode->LinkCount = 1;
     uareaobj.UFDT[i]->ptrinode->Permission = permission;
 
+    // Registering file entry into Directory
+    if(AddFileEntryInDir(name, temp->InodeNumber) == false) {
+        // Rollback!
+        free(uareaobj.UFDT[i]->ptrinode->Buffer);
+        free(uareaobj.UFDT[i]);
+        uareaobj.UFDT[i] = NULL;
+        superobj.FreeInodes++;
+        temp->FileType = 0; // Mark inode as free again
+        return ERR_NO_ENTRY_DIR;
+    }
 
     // Allocate memory for buffer
-
     uareaobj.UFDT[i]->ptrinode->Buffer = (char *)malloc(MAXFILESIZE);
 
     // Decrement the number of free inode
@@ -485,6 +797,103 @@ int CreateFile(
 
     return i;
     
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  isOpen
+//  Description:     It is used to check either file is opened or not.
+//  Input :          fileName
+//  Output :         bool 
+//  Author :         Mangesh Ashok Bedre
+//  Date :           28/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+bool isOpen(
+                char *name
+           )
+{
+    int i = 0,iRet = 0;
+    bool bFlag = false;
+
+    iRet = GetInodeOfFile(name);
+
+    if(iRet == ERR_NO_ENTRY_DIR)
+    {
+        printf("File not exists\n");
+        return bFlag;
+    }
+
+    // Checking UFDT for Not-NULL entry and check whether given file is opend or not 
+    for(i = 0; i < MAXOPENEDFILES; i++)
+    {
+        if(uareaobj.UFDT[i] != NULL)
+        {
+            if(((uareaobj.UFDT[i]->ptrinode->InodeNumber) == iRet))
+            {
+                bFlag = true;
+                break;
+
+            }//end of if
+        }// end of if
+
+    }// end of for
+
+    return bFlag;
+
+}
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  closeFile
+//  Description:     It is used to closed the open file.
+//  Input :          fileName
+//  Output :         int 
+//  Author :         Mangesh Ashok Bedre
+//  Date :           28/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+int closeFile(
+                char *name
+            )
+{
+    int i = 0,iRet = 0;
+    
+    // Check is file name is missing
+    if(name == NULL)
+    {
+        return ERR_INVALID_PARAMETER;
+    }
+
+    if(isOpen(name) == false)
+    {
+        return ERR_FILE_NOT_OPEN;
+    }
+
+    iRet = GetInodeOfFile(name);
+
+    for(i = 0; i < MAXOPENEDFILES; i++)
+    {
+        if(uareaobj.UFDT[i] != NULL)
+        {
+            if(((uareaobj.UFDT[i]->ptrinode->InodeNumber) == iRet))
+            {
+                //deallocate memory of FileTable
+
+                free(uareaobj.UFDT[i]);
+
+                //set NULL to ufdt member
+                uareaobj.UFDT[i] = NULL;
+
+                break;   
+
+            }//end of if
+        }// end of if
+
+    }// end of for
+
+    return EXECUTE_SUCCESS;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -503,55 +912,94 @@ int UnlinkFile(
                     char *name      // Name of file
                 )
 {
-    int i = 0;
+    int iRet = 0,i = 0;
+    PINODE temp = head;
+    int MaxEntry = 0;
+    struct DirEntry *DIR = NULL;
+    
+    if(strcmp(uareaobj.WorkingDir,"root") == 0)
+    {
+        DIR = (struct DirEntry*)temp->Buffer; 
+    }
+    else
+    {
+        while(temp != NULL)
+        {
+            if((GetInodeOfFile(uareaobj.WorkingDir) == temp->InodeNumber) && temp->FileType == SPECIALFILE)
+            {
+                DIR = (struct DirEntry *)temp->Buffer;
+                break;
+            }
+            temp = temp->next;
+            printf("Inside while\n");
+        }
+    }
 
+    MaxEntry = MAXFILESIZE / sizeof(struct DirEntry);
+
+    //Filters
+
+    // if name is missing
     if(name == NULL)
     {
         return ERR_INVALID_PARAMETER;
     }
+
+    //File not exist
     if(isFileExists(name) == false)
     {
         return ERR_FILE_NOT_EXIST;
     }
 
-    for(i = 0; i < MAXINODE; i++)
+    // Check whether file is opened before it get deleted
+    iRet = GetInodeOfFile(name);
+
+    // Instead of calling closeFile(name), do a full sweep:
+    for(i = 0; i < MAXOPENEDFILES; i++)
     {
-        if(uareaobj.UFDT[i] != NULL)
+        if(uareaobj.UFDT[i] != NULL && uareaobj.UFDT[i]->ptrinode->InodeNumber == iRet)
         {
-            if(strcmp(uareaobj.UFDT[i]->ptrinode->FileName,name) == 0)
-            {
-                //Deallocate memory of buffer 
-                free(uareaobj.UFDT[i]->ptrinode->Buffer);
+            free(uareaobj.UFDT[i]);
+            uareaobj.UFDT[i] = NULL;
+        }
+    }
 
-                //reset all value of inode
-                uareaobj.UFDT[i]->ptrinode->FileSize = 0;
-                uareaobj.UFDT[i]->ptrinode->ActualFileSize = 0;
-                uareaobj.UFDT[i]->ptrinode->LinkCount = 0;
-                uareaobj.UFDT[i]->ptrinode->Permission = 0;
-                uareaobj.UFDT[i]->ptrinode->FileType = 0;
-                uareaobj.UFDT[i]->ptrinode->ReferenceCount =0 ;
+    //clearing data from inode
+    while(temp != NULL)
+    {
+        if((iRet == temp->InodeNumber) && (temp->FileType == REGULARFILE))
+        {
+            temp->FileSize = 0;
+            temp->ActualFileSize = 0;
+            temp->LinkCount = 0;
+            temp->Permission = 0;
+            temp->FileType = 0;
+            temp->ReferenceCount =0 ; 
 
-                //deallocate memory of FileTable
+            //Increment the value FreeInode Count
+            superobj.FreeInodes++;
 
-                free(uareaobj.UFDT[i]);
+            break;
+        }
 
-                //set NULL to ufdt member
-                uareaobj.UFDT[i] = NULL;
+        temp = temp->next;
+    }
 
-                //Increment the value FreeInode Count
-                superobj.FreeInodes++;
-                break;
-
-            }//end of if
-        }// end of if
-
-    }// end of for
-
-
+    // Clearing entry from Directory File
+    for(i = 0; i < MaxEntry; i++)
+    {
+        if((DIR[i].InodeNumber == iRet))
+        {
+            strcpy(DIR[i].FileName,"");
+            DIR[i].InodeNumber = 0;
+            break;
+        }
+    }
 
     return EXECUTE_SUCCESS;
 
 }
+
 
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -567,17 +1015,43 @@ int UnlinkFile(
 // Mangesh/CVFS > ls
 void ls_File()
 {
-    PINODE temp = head;
-    
-    while(temp != NULL)
-    {
-        if(temp->FileType != 0)
-        {
-            printf("%s\n",temp->FileName);
-        }
+    PINODE temp  = head;
+    struct DirEntry* dir = NULL;
 
-        temp = temp->next;
+    int MaxEntry = MAXFILESIZE/sizeof(DirEntry);
+
+    if(strcmp(uareaobj.WorkingDir,"root") == 0)
+    {
+        dir = (struct DirEntry*)temp->Buffer; 
     }
+    else
+    {
+        while(temp != NULL)
+        {
+            if(((uareaobj.dirInode) == temp->InodeNumber) && temp->FileType == SPECIALFILE)
+            {
+                dir = (struct DirEntry *)temp->Buffer;
+                break;
+            }
+            temp = temp->next;
+        }
+    }
+
+    printf("-------------------------------------------------------------------\n");
+    printf("----------------Marvellous CVFS Files Information------------------\n");
+    printf("-------------------------------------------------------------------\n\n");
+    printf("Sr.no              File/Directory\n");
+    printf("-------------------------------------------------------------------\n");
+
+    for(int i = 0; i < MaxEntry; i++)
+    {     
+        if(dir[i].InodeNumber != 0)
+        {
+            printf("%d\t\t\t%s\n",i+1,dir[i].FileName);
+        }
+        
+    }
+    printf("\n-------------------------------------------------------------------\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -598,6 +1072,7 @@ int stat_file(
                 )
 {
     PINODE temp = head;
+    int iRet = 0;
 
     if(name == NULL)
     {
@@ -609,12 +1084,16 @@ int stat_file(
         return ERR_FILE_NOT_EXIST;
     }
 
+    iRet = GetInodeOfFile(name);
+
     while(temp != NULL)
     {
-        if((strcmp(name,temp->FileName) == 0) && (temp->FileType != 0))
+        if((iRet == temp->InodeNumber) && (temp->FileType != 0))
         {
+            printf("\n-------------------------------------------------------------------\n");
             printf("-----------------Statical Information of file------------------------\n");
-            printf("File name : %s\n",temp->FileName);
+            printf("-------------------------------------------------------------------\n\n");
+            printf("File name : %s\n",name);
             printf("File size on disk : %d bytes\n",temp->FileSize);
             printf("Actual file size : %d bytes \n",temp->ActualFileSize);
             printf("Link Count : %d\n",temp->LinkCount);
@@ -644,7 +1123,7 @@ int stat_file(
             }
 
             printf("------------------------------------------------------------------------\n");
-
+            break;
         }
 
         temp = temp->next;
@@ -677,9 +1156,6 @@ int write_file(
             )
 {
     unsigned long int offset = 0;
-    printf("File descriptor : %d\n",fd);
-    printf("Data that we want to write : %s\n",data);
-    printf("number of bytes that we want to write : %d\n",size);
 
     //filter
     
@@ -717,7 +1193,7 @@ int write_file(
     //Update the actual size of file after writing the data
     uareaobj.UFDT[fd]->ptrinode->ActualFileSize = uareaobj.UFDT[fd]->ptrinode->ActualFileSize + size;
 
-    return 0;
+    return size;
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -766,7 +1242,7 @@ int read_file(
     }
 
     // Unable to read  as Insufficient data
-    if((MAXFILESIZE - uareaobj.UFDT[fd]->ReadOffset) < size)
+    if((uareaobj.UFDT[fd]->ptrinode->ActualFileSize - uareaobj.UFDT[fd]->ReadOffset) < size)
     {
         return ERR_INSUFFICIENT_DATA;
     }
@@ -777,6 +1253,135 @@ int read_file(
 
     return EXECUTE_SUCCESS;
 }
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  MakeDir
+//  Description:     It is used to create directory file
+//  Input :          It accept the dir file name 
+//  Output :         int
+//  Author :         Mangesh Ashok Bedre
+//  Date :           29/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+int MakeDir(
+                char* name
+            )
+{
+    PINODE temp = head;
+    int i = 0;
+    
+    // name of file missing 
+    if(name == NULL)
+    {
+        return ERR_INVALID_PARAMETER;
+    }
+
+    // Check whether empty inode is there or not 
+    if(superobj.FreeInodes == 0)
+    {
+        return ERR_NO_INODE;
+    }
+
+    //check whether file already exists or not
+    if(isFileExists(name))
+    {
+        return ERR_FILE_ALREADY_EXIST;
+    }
+
+    while(temp != NULL)
+    {
+        if(temp->FileType == 0)
+        {
+            break;
+        }
+        temp = temp -> next;
+    }
+
+    // no inode remain for make new file
+    if(temp == NULL)
+    {
+        return ERR_NO_INODE;
+    }
+
+    //Initialising inode member
+    temp->FileType = SPECIALFILE;
+    temp->FileSize = MAXFILESIZE;
+    temp->ActualFileSize = 0;
+    temp->ReferenceCount = 1; // It is referenced by the parent directory
+    temp->Permission = READ + WRITE; // Give permissions
+
+    //Allocate memory for file data(data block)
+    temp->Buffer = (char*)malloc(MAXFILESIZE);
+
+    memset(temp->Buffer,'\0',MAXFILESIZE);
+
+    //Registering entry of new dir in root or current directory
+    AddFileEntryInDir(name,temp->InodeNumber);
+    
+    // Deallocate memory of fileTable
+    // free(uareaobj.UFDT[i]);
+    // uareaobj.UFDT[i] = NULL;
+    
+    superobj.FreeInodes--;
+
+    return EXECUTE_SUCCESS;
+
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  ChangeDir
+//  Description:     It is used to change current directory file
+//  Input :          It accept the dir file name 
+//  Output :         int
+//  Author :         Mangesh Ashok Bedre
+//  Date :           29/01/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+int ChangeDir(
+                char *name
+            )
+{
+    int iRet = 0;
+    
+    if(name == NULL)
+    {
+        return ERR_INVALID_PARAMETER;
+    }
+
+    if(isFileExists(name) == false)
+    {
+        return ERR_FILE_NOT_EXIST;
+    }
+
+    // changing current directory
+    uareaobj.dirInode = GetInodeOfFile(name);
+    strcpy(uareaobj.WorkingDir,name);
+
+    return EXECUTE_SUCCESS;
+
+}
+
+////////////////////////////////////////////////////////////////////////////
+//
+//  Function name :  getCurrentDir
+//  Description:     It is used to get current directory file
+//  Input :          -
+//  Output :         -
+//  Author :         Mangesh Ashok Bedre
+//  Date :           09/02/2026
+//
+///////////////////////////////////////////////////////////////////////////
+
+void getCurrentDir()
+{
+    printf("Current Dir Name : %s\n",uareaobj.WorkingDir);
+    printf("Current Dir inode : %d\n",uareaobj.dirInode);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -816,7 +1421,7 @@ int main()
         {   
             // Mangesh/CVFS > exit
             
-            if(stricmp(Command[0],"exit") == 0)
+            if(strcmp(Command[0],"exit") == 0)
             {
                 printf("\nThank you for using marvellous CVFS\n");
                 printf("Deallocating all the resouces...\n");
@@ -832,15 +1437,24 @@ int main()
 
             // Mangesh/CVFS > clear
 
-            else if(strcmp(Command[0],"cls") == 0)
+            else if(strcmp(Command[0],"clear") == 0)
             {
-                system("cls");
+                // Conditional pre-processing
+                #ifdef _WIN32   
+                    system("cls");
+                #else
+                    system("clear");
+                #endif
             }
 
             // Mangesh/CVFS > ls
             else if(strcmp(Command[0],"ls") == 0)
             {
                 ls_File();
+            }
+            else if(strcmp(Command[0],"pwd") == 0)
+            {
+                getCurrentDir();
             }
             else
             {   
@@ -851,13 +1465,10 @@ int main()
 
         }   // end of if (icount == 1)
 
-
-        
-
         else if(iCount == 2)
         {
 
-            // Mangesh/CVFS > man
+            // Mangesh/CVFS > man ls
             if(strcmp(Command[0],"man") == 0)
             {
                 ManPage(Command[1]);
@@ -874,7 +1485,28 @@ int main()
                 }
                 else if( iRet == ERR_FILE_NOT_EXIST)
                 {
-                    printf("Error : Unable to do display activity as file not present\n");
+                    printf("Error : Unable to do delete activity as file not present\n");
+                }
+                else if(iRet == ERR_INVALID_PARAMETER)
+                {
+                    printf("Error : Invalid parameter for the function\n");
+                    printf("Please check man page for more details\n");
+
+                }
+            }
+
+            // Mangesh/CVFS > rmdir Desktop
+            else if(strcmp(Command[0],"rmdir")==0)
+            {
+                iRet = UnlinkFile(Command[1]);
+
+                if(iRet == EXECUTE_SUCCESS)
+                {
+                    printf(" Unlink Operation successfully performed\n");
+                }
+                else if( iRet == ERR_FILE_NOT_EXIST)
+                {
+                    printf("Error : Unable to do delete activity as file not present\n");
                 }
                 else if(iRet == ERR_INVALID_PARAMETER)
                 {
@@ -901,7 +1533,7 @@ int main()
                 }
             }
 
-            // Mangesh/CVFS >  write 3            here 3 is fd
+            // Mangesh/CVFS >  write  3            here 3 is fd
             else if(strcmp(Command[0],"write") == 0)
             {
                 
@@ -931,10 +1563,92 @@ int main()
                 }
                 else
                 {
-                    printf(" %d bytes gets successfully written\n",iRet);
-                    printf("Data from file is : %s\n",uareaobj.UFDT[0]->ptrinode->Buffer);
+                    printf("%d bytes gets successfully written\n",iRet);
                 }
             }
+             // Mangesh/CVFS >  open <file_name>            ex. open Demo.txt    
+            else if(strcmp(Command[0],"open") == 0)
+            {
+                iRet = OpenFile(Command[1]);
+
+                if(iRet == ERR_FILE_NOT_EXIST)
+                {
+                    printf("Error : Unble to open file as file not exist\n");
+                }
+                else if(iRet == ERR_MAX_FILE_OPEN)
+                {
+                    printf("Error : Unble to open file as max file opened\n");
+                }
+                else
+                {
+                    printf("File open with fd : %d\n",iRet);
+                }
+            }
+            // Mangesh/CVFS >  close <file_name>            ex. close Demo.txt 
+            else if(strcmp(Command[0],"close") == 0)
+            {
+                iRet = closeFile(Command[1]);
+
+                if(iRet == ERR_INVALID_PARAMETER)
+                {
+                    printf("Unble to close file as wrong file name\n");
+                }
+                else if(iRet == ERR_FILE_NOT_OPEN)
+                {
+                    printf("Unble to closed file bcz file is not open\n");
+                }
+                else if(iRet == EXECUTE_SUCCESS)
+                {
+                    printf("File closed successfully\n");
+                }
+            }
+
+            // Mangesh/CVFS >  mkdir <dir_name>            ex. mkdir Desktop 
+            else if(strcmp(Command[0],"mkdir") == 0)
+            {
+                iRet = MakeDir(Command[1]);
+
+                if(iRet == ERR_INVALID_PARAMETER)
+                {
+                    printf("Error : Unble to create dir as invalid parameter\n");
+                }
+                else if(iRet == ERR_FILE_ALREADY_EXIST)
+                {
+                    printf("Error : Unble to creat dir as file already exist\n");
+                }
+                else if(iRet == ERR_NO_INODE)
+                {
+                    printf("Error : Unble to creat dir as No inode \n");
+                }
+                else if(iRet == ERR_MAX_FILE_OPEN)
+                {
+                    printf("Error : Unble to creat dir as Max file opend limit reached\n");
+                }
+                else if(iRet == EXECUTE_SUCCESS)
+                {
+                    printf("Dir file created successfully\n");
+                }
+            }
+
+            // Mangesh/CVFS >  cd <dir_name>            ex. cd Desktop 
+            else if(strcmp(Command[0],"cd") == 0)
+            {
+                iRet = ChangeDir(Command[1]);
+
+                if(iRet == ERR_INVALID_PARAMETER)
+                {
+                    printf("Error : Unble to change dir as invalid parameter\n");
+                }
+                else if(iRet == ERR_FILE_NOT_EXIST)
+                {
+                    printf("Error : Unble to change dir as file not exist\n");
+                }
+                else if(iRet == EXECUTE_SUCCESS)
+                {
+                    printf("Change current dir successfully\n");
+                }
+            }
+
             else
             {   
                 printf("zsh : Command not found\n");
@@ -965,11 +1679,18 @@ int main()
                 {
                     printf("Error : Unable to create file as file already exists\n");
                 }
-                else
+                else if(iRet == ERR_MAX_FILE_OPEN)
                 {
-                    printf("File is successfully created with fd %d\n",iRet);
+                    printf("Error : Unable to opened file as max opened  limit  reached\n");
                 }
-
+                else if(iRet == ERR_NO_ENTRY_DIR)
+                {
+                    printf("Error : Directory file is Full no new entry\n");
+                }
+                else 
+                {
+                    printf("File is successfully created with fd : %d\n",iRet);
+                }
 
             }
             // Mangesh/CVFS > read 3 10       3-> fd  10->size
@@ -980,7 +1701,7 @@ int main()
 
                 if(iRet == ERR_INSUFFICIENT_DATA)
                 {
-                    printf("Error : Insufficient data of the data block  file\n");
+                    printf("Error : Insufficient data inside file\n");
                 }
                 else if(iRet == ERR_PERMISSION_DENIED)
                 {
