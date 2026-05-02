@@ -2,7 +2,7 @@
 
 ## Description
 
-This project is a C++ implementation of a Custom Virtual File System (CVFS). It simulates the core functionalities of a file system entirely in memory, providing a hands-on understanding of concepts like Inodes, Superblocks, File Descriptor Tables, and system calls for file manipulation. The program features its own custom command-line shell that allows users to create, read, write, and delete files within this virtual environment.
+This project is a C++ implementation of a Custom Virtual File System (CVFS). It simulates the core functionalities of a file system entirely in memory, providing a hands-on understanding of essential operating system concepts such as Inodes, Superblocks, File Descriptor Tables, and hierarchical directory structures. The program features a custom command-line shell that allows users to perform standard file and directory operations, including creating, reading, writing, and deleting files, as well as navigating and managing nested directories within this virtual environment
 
 ## Features
 
@@ -32,6 +32,9 @@ The following table lists the commands available in the CVFS shell.
 | `unlink` | `unlink <file_name>` | Deletes an existing file from the file system. |
 | `write` | `write <fd>` | Writes data to a file specified by its file descriptor (fd). |
 | `read` | `read <fd> <size>` | Reads a specified number of bytes from a file. |
+| `mkdir` | `mkdir <directory_name>` | Create a new directory.|
+| `rmdir` | `rmdir <directory_name>` | Remove a directory.|
+| `pwd` | `pwd ` | Print current working directory.|
 | `ls` | `ls` | Lists all files currently existing in the file system. |
 | `stat` | `stat <file_name>` | Displays statistical information about a specific file. |
 | `man` | `man <command_name>` | Shows the manual page with usage details for a specific command. |
@@ -57,36 +60,162 @@ The following table lists the commands available in the CVFS shell.
 Here is a sample session demonstrating how to use the CVFS shell:<br>
 <br>
 The shell prompt appears<br>
-Mangesh/CVFS > creat myFile.txt 3<br>
-File is succesfully created with FD : 0<br>
+Boot Process of Operating System Done<br>
+CVFS : super block initialised sucessfully<br>
+CVFS : DILB created sucessfully<br>
+CVFS : UREA initialised sucessfully<br>
+CVFS : Created root directory successfully<br>
+CVFS : Auxillary data initialised sucessfully<br>
+-----------------------------------------------------------------------------------<br>
+------------------------- CVFS started Succesfully---------------------------------<br>
+-----------------------------------------------------------------------------------<br>
 <br>
-Mangesh/CVFS > write 0<br>
-Please enter the data that you want to write into the file :<br>
-Hello World<br>
-11 bytes gets succesfully written into the file<br>
-Data from file is : Hello World<br>
+Mangesh\CVFS > help<br>
+-----------------------------------------------------------------------------------<br>
+-------------------------Command manual of CVFS------------------------------------<br>
+-----------------------------------------------------------------------------------<br>
+man : It is used to display the specific manual page of command<br>
+write : It is used to write the data into file<br>
+ls : It is used to list out all files from directory<br>
+read : It is used to read the data from the file<br>
+stat : It is used to display statical information about file<br>
+creat : It is used to create new regular file<br>
+open : It is used to open regular file<br>
+close : It is used to close regular file<br>
+mkdir : It is used to create new directory<br>
+rmdir : It is used to delete  directory<br>
+cd : It is used to change directory from one directory to another<br>
+pwd : It is used to display current working directory<br>
+unlink : It is used to unlink the file<br>
+cls : It is used to clear the console of marvellous CVFS<br>
+exit : It is used to terminate the shell of marvellous  CVFS<br>
 <br>
-Mangesh/CVFS > ls<br>
-myFile.txt<br>
+Mangesh\CVFS > pwd<br>
+Current Dir Name : root<br>
+Current Dir inode : 1<br>
 <br>
-Mangesh/CVFS > stat myFile.txt<br>
------------- Statistical Information of file -----------<br>
-File name : myFile.txt<br>
-File size on Disk : 100<br>
-Actual File size : 11<br>
-Link count : 1<br>
-File permission : Read + Write<br>
-File type : Regular file<br>
-Mangesh/CVFS > read 0 5<br>
-Read operation is successfull<br>
-Data from file is : Hello<br>
+Mangesh\CVFS > man creat <br>
+Description : This command is used to create regular file on our system<br>
+Usage : create <file_name> <Permission><br>
+file_name : The name file that you want to create <br>
+Permission : <br>
+1 : read<br>
+2 : write<br>
+3 : readwite<br>
 <br>
-Mangesh/CVFS > unlink myFile.txt<br>
-Unlink Opertaion is succesfully performed<br>
+Mangesh\CVFS > creat myfile.txt 3<br>
+File is successfully created with fd : 0<br>
 <br>
-Mangesh/CVFS > ls<br>
+Mangesh\CVFS > man open	<br>
+Description : This command is used to open the file<br>
+Usage : open <file_name><br>
+file_name : The name of file that you want to open<br>
 <br>
-(no output, as the file has been deleted)<br>
+Mangesh\CVFS > open myFile.txt<br>
+Error : Unble to open file as file not exist<br>
+
+Mangesh\CVFS > ls<br>
+-------------------------------------------------------------------<br>
+Marvellous CVFS Files Information------------------<br>
+-------------------------------------------------------------------<br>
+<br>
+Sr.no              File/Directory<br>
+-------------------------------------------------------------------<br>
+1			myfile.txt<br>
+<br>
+-------------------------------------------------------------------<br>
+<br>
+Mangesh\CVFS > open myfile.txt<br>
+File open with fd : 1<br>
+<br>
+Mangesh\CVFS > man write <br>
+Description : This command is used to write the data into file<br>
+Usage : write <file_descriptor><br>
+<br>
+Mangesh\CVFS > write 1<br>
+Please enter the data you want to write into file : <br>
+Jay Ganesh...<br>
+13 bytes gets successfully written<br>
+<br>
+Mangesh\CVFS > man read<br>
+Description : This command is used to read the data from file<br>
+Usage : read <file_descriptor> <size><br>
+file_decriptor : Its a value returned by create system call<br>
+size : Number of byte that you want to read<br>
+<br>
+Mangesh\CVFS > read 1 13<br>
+Read operation is Successful <br>
+Data from file : Jay Ganesh...<br>
+<br>
+Mangesh\CVFS > pwd <br>
+Current Dir Name : root<br>
+Current Dir inode : 1<br>
+<br>
+Mangesh\CVFS > mkdir Desktop<br>
+Directory file created successfully<br>
+<br>
+Mangesh\CVFS > ls <br>
+-------------------------------------------------------------------<br>
+Marvellous CVFS Files Information------------------<br>
+-------------------------------------------------------------------<br>
+<br>
+Sr.no              File/Directory<br>
+-------------------------------------------------------------------<br>
+1			myfile.txt<br>
+2			Desktop<br>
+<br>
+-------------------------------------------------------------------<br>
+<br>
+Mangesh\CVFS > cd Desktop<br>
+Change current dir successfully<br>
+<br>
+Mangesh\CVFS > ls<br>
+-------------------------------------------------------------------<br>
+Marvellous CVFS Files Information------------------<br>
+-------------------------------------------------------------------<br>
+<br>
+Sr.no              File/Directory<br>
+-------------------------------------------------------------------<br>
+<br>
+-------------------------------------------------------------------<br>
+<br>
+Mangesh\CVFS > creat newfile.txt 3<br>
+File is successfully created with fd : 2<br>
+<br>
+Mangesh\CVFS > ls<br>
+-------------------------------------------------------------------<br>
+Marvellous CVFS Files Information------------------<br>
+-------------------------------------------------------------------<br>
+<br>
+Sr.no              File/Directory<br>
+-------------------------------------------------------------------<br>
+1			newfile.txt<br>
+<br>
+-------------------------------------------------------------------<br>
+<br>
+Mangesh\CVFS > pwd<br>
+Current Dir Name : Desktop<br>
+Current Dir inode : 3<br>
+<br>
+Mangesh\CVFS > open newfile.txt<br>
+File open with fd : 3<br>
+<br>
+Mangesh\CVFS > write 3<br>
+Please enter the data you want to write into file : <br>
+I am Student<br>
+12 bytes gets successfully written<br>
+<br>
+Mangesh\CVFS > man read<br>
+Description : This command is used to read the data from file<br>
+Usage : read <file_descriptor> <size><br>
+file_decriptor : Its a value returned by create system call<br>
+size : Number of byte that you want to read<br>
+<br>
+Mangesh\CVFS > read 3 12<br>
+Read operation is Successful <br>
+Data from file : I am Student<br>
+
+<br>
 CVFS > exit<br>
 Thank you for using CVFS<br>
 Deallocating all resources...<br>
