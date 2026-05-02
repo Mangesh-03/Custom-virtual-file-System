@@ -35,6 +35,7 @@ The following table lists the commands available in the CVFS shell.
 | `mkdir` | `mkdir <directory_name>` | Create a new directory.|
 | `rmdir` | `rmdir <directory_name>` | Remove a directory.|
 | `pwd` | `pwd ` | Print current working directory.|
+| `cd` | `cd ` | Change current directory.|
 | `ls` | `ls` | Lists all files currently existing in the file system. |
 | `stat` | `stat <file_name>` | Displays statistical information about a specific file. |
 | `man` | `man <command_name>` | Shows the manual page with usage details for a specific command. |
