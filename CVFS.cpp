@@ -507,11 +507,21 @@ int GetInodeOfFile(
     struct DirEntry* DIR = NULL;
 
     // If we want inode of root. we have give it manually we root entry not register any where.
-    if((strcmp(name,"root") == 0)) return 1;
-    
+    if((strcmp(name,"root") == 0)) 
+    {
+        cout << "going from here" <<"\n";
+        return 1;
+    }
     // Check we are in which current dir and get its Buffer
     DIR = GetCurrentDirBuffer();
-    if(DIR == NULL) return false;
+    if(DIR == NULL) 
+    {
+        cout << "zero from here" <<"\n";
+        return false;
+    }
+
+    cout << "File Name : " << DIR->FileName << "\n";
+    cout << "Inode No : " << DIR->InodeNumber << "\n";
 
     MaxEntry = MAXFILESIZE / sizeof(struct DirEntry);
 
@@ -520,6 +530,7 @@ int GetInodeOfFile(
     {
         if(strcmp(DIR[i].FileName,name) == 0)
         {
+            cout << "Inside break\n";
             InodeNumber = DIR[i].InodeNumber;
             break;
         }
@@ -917,22 +928,12 @@ int UnlinkFile(
     int MaxEntry = 0;
     struct DirEntry *DIR = NULL;
     
-    if(strcmp(uareaobj.WorkingDir,"root") == 0)
+    DIR = GetCurrentDirBuffer();
+
+    if(DIR == NULL)
     {
-        DIR = (struct DirEntry*)temp->Buffer; 
-    }
-    else
-    {
-        while(temp != NULL)
-        {
-            if((GetInodeOfFile(uareaobj.WorkingDir) == temp->InodeNumber) && temp->FileType == SPECIALFILE)
-            {
-                DIR = (struct DirEntry *)temp->Buffer;
-                break;
-            }
-            temp = temp->next;
-            printf("Inside while\n");
-        }
+        printf("Error: Could not get current directory buffer\n");
+        return ERR_INVALID_PARAMETER;
     }
 
     MaxEntry = MAXFILESIZE / sizeof(struct DirEntry);
@@ -1097,6 +1098,7 @@ int stat_file(
             printf("File size on disk : %d bytes\n",temp->FileSize);
             printf("Actual file size : %d bytes \n",temp->ActualFileSize);
             printf("Link Count : %d\n",temp->LinkCount);
+            printf("Inode Number : %d\n",iRet);
             printf("File Permission : ");
 
             if(temp->Permission == READ)
@@ -1626,7 +1628,7 @@ int main()
                 }
                 else if(iRet == EXECUTE_SUCCESS)
                 {
-                    printf("Dir file created successfully\n");
+                    printf("Directory file created successfully\n");
                 }
             }
 
