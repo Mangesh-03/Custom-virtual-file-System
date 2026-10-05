@@ -2,7 +2,7 @@
 CC = g++
 
 app:Main.o CVFS.o
-	$(CC) Main.cpp CVFS.o -o app
+	$(CC) Main.o CVFS.o -o app
 
 Main.o:
 	$(CC) -c Main.cpp 
